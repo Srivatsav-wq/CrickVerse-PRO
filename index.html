@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>CrickVerse Pro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{margin:0;font-family:Arial;background:#0f172a;color:white}
+header{background:#111827;padding:15px;text-align:center;font-size:22px;color:#38bdf8;font-weight:bold}
+.container{padding:12px}
+
+.card{background:#1f2937;padding:12px;margin:10px 0;border-radius:8px}
+
+input,button,select{
+width:100%;padding:8px;margin:5px 0;border-radius:5px;border:none
+}
+
+button{
+background:#38bdf8;color:black;font-weight:bold;cursor:pointer
+}
+
+.deleteBtn{background:red;color:white}
+
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #374151;padding:6px;text-align:center}
+th{background:#38bdf8;color:black}
+
+.hidden{display:none}
+.section{display:none}
+.active{display:block}
+</style>
+</head>
+
+<body>
+
+<header>🏏 CrickVerse Pro</header>
+
+<div class="container">
+
+<!-- HOME -->
+<div id="home" class="section active">
+
+<div class="card">
+<h3>Create Tournament</h3>
+<input id="tname">
+<button id="createBtn">Create</button>
+</div>
+
+<div class="card">
+<h3>Tournaments</h3>
+<div id="list"></div>
+</div>
+
+</div>
+
+<!-- TOURNAMENT -->
+<div id="tournament" class="section">
+
+<div class="card">
+<h3 id="title"></h3>
+<button id="backHome">⬅ Back</button>
+</div>
+
+<div class="card">
+<input id="team">
+<button id="addTeamBtn">Add Team</button>
+<ul id="teams"></ul>
+</div>
+
+<div class="card">
+<button id="genFixtures">Generate Fixtures</button>
+</div>
+
+<div id="fixtures"></div>
+
+<div class="card">
+<h3>Points Table</h3>
+<div id="table"></div>
+</div>
+
+<div class="card">
+<h3>History</h3>
+<div id="history"></div>
+</div>
+
+</div>
+
+<!-- MATCH -->
+<div id="match" class="section">
+
+<div class="card">
+<h3 id="matchTitle"></h3>
+</div>
+
+<div class="card">
+
+<h4>Toss Winner</h4>
+<select id="toss"></select>
+
+<h4>Choice</h4>
+<select id="choice">
+<option>Bat</option>
+<option>Bowl</option>
+</select>
+
+<hr>
+
+<h4 id="teamA"></h4>
+
+<input id="r1" placeholder="Runs">
+<input id="o1" placeholder="Overs (e.g 4.2)">
+<input id="w1" placeholder="Wickets">
+
+<hr>
+
+<h4 id="teamB"></h4>
+
+<input id="r2" placeholder="Runs">
+<input id="o2" placeholder="Overs (e.g 4.2)">
+<input id="w2" placeholder="Wickets">
+
+<button id="submitMatch">Submit Match</button>
+
+<button id="backTournament">⬅ Back</button>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let db = JSON.parse(localStorage.getItem("cvpro")) || {};
+let current = null;
+let currentMatch = null;
+
+const $ = id => document.getElementById(id);
+
+/* SAVE */
+function save(){
+localStorage.setItem("cvpro",JSON.stringify(db));
+}
+
+/* SCREEN SWITCH */
+function show(screen){
+["home","tournament","match"].forEach(s=>{
+$(s).classList.remove("active");
+});
+$(screen).classList.add("active");
+}
+
+/* CREATE */
+$("createBtn").onclick = () => {
+let name = $("tname").value.trim();
+if(!name) return;
+
+db[name] = {
+teams:[],
+stats:{},
+matches:[],
+history:[]
+};
+
+save();
+renderList();
+$("tname").value="";
+};
+
+/* LIST */
+function renderList(){
+$("list").innerHTML="";
+
+Object.keys(db).forEach(name=>{
+let div=document.createElement("div");
+div.className="card";
+
+div.innerHTML=`<b>${name}</b>`;
+
+let open=document.createElement("button");
+open.textContent="Open";
+open.onclick=()=>openTournament(name);
+
+let del=document.createElement("button");
+del.textContent="Delete";
+del.className="deleteBtn";
+del.onclick=()=>{
+delete db[name];
+save();
+renderList();
+};
+
+div.appendChild(open);
+div.appendChild(del);
+
+$("list").appendChild(div);
+});
+}
+renderList();
+
+/* OPEN */
+function openTournament(name){
+current = db[name];
+show("tournament");
+
+$("title").innerText = name;
+renderTeams();
+update();
+}
+
+/* BACK */
+$("backHome").onclick = () => show("home");
+
+/* TEAMS */
+function renderTeams(){
+$("teams").innerHTML="";
+current.teams.forEach(t=>{
+let li=document.createElement("li");
+li.textContent=t;
+$("teams").appendChild(li);
+});
+}
+
+/* ADD TEAM */
+$("addTeamBtn").onclick = () => {
+let t=$("team").value.trim();
+if(!t || current.teams.includes(t)) return;
+
+current.teams.push(t);
+current.stats[t]={m:0,w:0,l:0,r:0,c:0,pts:0};
+
+$("team").value="";
+save();
+renderTeams();
+};
+
+/* FIXTURES */
+$("genFixtures").onclick = () => {
+
+current.matches=[];
+$("fixtures").innerHTML="";
+
+let t=[...current.teams];
+
+for(let i=0;i<t.length;i++){
+for(let j=i+1;j<t.length;j++){
+current.matches.push({
+a:t[i],
+b:t[j],
+played:false,
+result:""
+});
+}}
+
+current.matches.sort(()=>Math.random()-0.5);
+
+current.matches.forEach((m,i)=>{
+let div=document.createElement("div");
+div.className="card";
+
+div.innerHTML=`<b>${m.a} vs ${m.b}</b><br>${m.result || ""}`;
+
+let btn=document.createElement("button");
+btn.textContent = m.played ? "Played" : "Play Match";
+btn.disabled = m.played;
+
+btn.onclick = () => openMatch(i);
+
+div.appendChild(btn);
+$("fixtures").appendChild(div);
+});
+
+save();
+update();
+};
+
+/* OPEN MATCH */
+function openMatch(i){
+currentMatch = current.matches[i];
+
+show("match");
+
+$("matchTitle").innerText = `${currentMatch.a} vs ${currentMatch.b}`;
+
+$("teamA").innerText = currentMatch.a;
+$("teamB").innerText = currentMatch.b;
+
+$("toss").innerHTML = `
+<option>${currentMatch.a}</option>
+<option>${currentMatch.b}</option>
+`;
+
+$("r1").value="";
+$("r2").value="";
+$("o1").value="";
+$("o2").value="";
+$("w1").value="";
+$("w2").value="";
+}
+
+/* SUBMIT MATCH */
+$("submitMatch").onclick = () => {
+
+let m = currentMatch;
+if(m.played) return;
+
+let r1=parseInt($("r1").value);
+let r2=parseInt($("r2").value);
+
+let o1=$("o1").value;
+let o2=$("o2").value;
+
+let w1=parseInt($("w1").value);
+let w2=parseInt($("w2").value);
+
+if(isNaN(r1)||isNaN(r2)||isNaN(w1)||isNaN(w2)){
+alert("Enter valid data");
+return;
+}
+
+let a=m.a;
+let b=m.b;
+
+/* matches */
+current.stats[a].m++;
+current.stats[b].m++;
+
+/* runs */
+current.stats[a].r += r1;
+current.stats[b].r += r2;
+
+/* conceded */
+current.stats[a].c += r2;
+current.stats[b].c += r1;
+
+/* wickets */
+current.stats[a].wickets = (current.stats[a].wickets||0)+w1;
+current.stats[b].wickets = (current.stats[b].wickets||0)+w2;
+
+/* result */
+let result="";
+
+if(r1>r2){
+current.stats[a].w++;
+current.stats[b].l++;
+current.stats[a].pts+=2;
+result=a+" won";
+}
+else if(r2>r1){
+current.stats[b].w++;
+current.stats[a].l++;
+current.stats[b].pts+=2;
+result=b+" won";
+}
+else{
+current.stats[a].pts++;
+current.stats[b].pts++;
+result="Match tied";
+}
+
+m.played = true;
+m.result = result;
+
+current.history.push(
+`${a} ${r1}/${w1} (${o1}) vs ${b} ${r2}/${w2} (${o2}) → ${result}`
+);
+
+save();
+show("tournament");
+update();
+};
+
+/* NRR */
+function nrr(s){
+if(!s.m) return "0.00";
+return ((s.r - s.c)/s.m).toFixed(2);
+}
+
+/* TABLE */
+function update(){
+
+if(!current) return;
+
+let t=Object.entries(current.stats)
+.sort((a,b)=>b[1].pts-a[1].pts);
+
+let html=`<table>
+<tr>
+<th>Team</th>
+<th>M</th>
+<th>W</th>
+<th>L</th>
+<th>Pts</th>
+<th>NRR</th>
+</tr>`;
+
+t.forEach(x=>{
+html+=`
+<tr>
+<td>${x[0]}</td>
+<td>${x[1].m}</td>
+<td>${x[1].w}</td>
+<td>${x[1].l}</td>
+<td>${x[1].pts}</td>
+<td>${nrr(x[1])}</td>
+</tr>`;
+});
+
+html+="</table>";
+
+$("table").innerHTML = html;
+
+$("history").innerHTML="";
+current.history.forEach(h=>{
+$("history").innerHTML+=`<p>${h}</p>`;
+});
+}
+
+</script>
+
+</body>
+</html>
